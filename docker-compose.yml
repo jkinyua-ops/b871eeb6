@@ -1,94 +1,24 @@
 version: '3.8'
 
 services:
-  nostra-dataload-host:
-    image: nostra-dataload-host
-    build:
-      context: .
-      dockerfile: Nostra.DataLoad.Host/Dockerfile
-    ports:
-      - "5001:80"
-      - "5002:443"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultSqlConnection=Server=sqlserver;Database=Nostra_Dataload;User Id=sa;Password=${SQL_PASSWORD};TrustServerCertificate=True;
-      - ConnectionStrings__TaskQueueConnection=Server=sqlserver;Database=Nostra_Dataload_Tasks;User Id=sa;Password=${SQL_PASSWORD};TrustServerCertificate=True;
-    depends_on:
-      - sqlserver
-    networks:
-      - nostra-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  nostra-dataload-ui:
-    image: nostra-dataload-ui
-    build:
-      context: .
-      dockerfile: Nostra.DataLoad.UI/Dockerfile
-    ports:
-      - "5003:80"
-      - "5004:443"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultSqlConnection=Server=sqlserver;Database=Nostra_Dataload;User Id=sa;Password=${SQL_PASSWORD};TrustServerCertificate=True;
-      - API__BaseUrl=http://nostra-dataload-host
-    depends_on:
-      - nostra-dataload-host
-      - sqlserver
-    networks:
-      - nostra-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  mlmodel-webapi:
-    image: mlmodel-webapi
-    build:
-      context: .
-      dockerfile: MLModel1_WebApi1/Dockerfile
-    ports:
-      - "5005:80"
-      - "5006:443"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-    networks:
-      - nostra-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2019-latest
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: nostra-sqlserver
     environment:
       - ACCEPT_EULA=Y
-      - SA_PASSWORD=${SQL_PASSWORD}
-      - MSSQL_PID=Express
+      - SA_PASSWORD=YourStrongPassword123!
+      - MSSQL_PID=Developer
     ports:
       - "1433:1433"
     volumes:
       - sqlserver-data:/var/opt/mssql
-    networks:
-      - nostra-network
     healthcheck:
-      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "${SQL_PASSWORD}" -Q "SELECT 1" || exit 1
+      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "YourStrongPassword123!" -Q "SELECT 1" -b -o /dev/null
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
-
-networks:
-  nostra-network:
-    driver: bridge
+      start_period: 10s
+    restart: unless-stopped
 
 volumes:
   sqlserver-data:
