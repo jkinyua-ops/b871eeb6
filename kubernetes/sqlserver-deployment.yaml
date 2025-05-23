@@ -1,22 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: sqlserver
+  name: nostra-sqlserver
   labels:
-    app: sqlserver
+    app: nostra-sqlserver
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: sqlserver
+      app: nostra-sqlserver
   template:
     metadata:
       labels:
-        app: sqlserver
+        app: nostra-sqlserver
     spec:
       containers:
       - name: sqlserver
-        image: mcr.microsoft.com/mssql/server:2019-latest
+        image: mcr.microsoft.com/mssql/server:2022-latest
         ports:
         - containerPort: 1433
         env:
@@ -25,40 +25,41 @@ spec:
         - name: SA_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: sqlserver-secrets
+              name: nostra-db-secrets
               key: sa-password
         - name: MSSQL_PID
-          value: "Express"
+          value: "Developer"
+        resources:
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+          requests:
+            memory: "2Gi"
+            cpu: "1"
         volumeMounts:
         - name: sqlserver-data
           mountPath: /var/opt/mssql
-        resources:
-          limits:
-            memory: "2Gi"
-            cpu: "1"
-          requests:
-            memory: "1Gi"
-            cpu: "0.5"
         livenessProbe:
           exec:
             command:
             - /bin/sh
             - -c
-            - /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $SA_PASSWORD -Q "SELECT 1" || exit 1
+            - /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $SA_PASSWORD -Q "SELECT 1" -b -o /dev/null
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
-          failureThreshold: 5
+          failureThreshold: 3
         readinessProbe:
           exec:
             command:
             - /bin/sh
             - -c
-            - /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $SA_PASSWORD -Q "SELECT 1" || exit 1
-          initialDelaySeconds: 30
+            - /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $SA_PASSWORD -Q "SELECT 1" -b -o /dev/null
+          initialDelaySeconds: 15
           periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
       volumes:
       - name: sqlserver-data
         persistentVolumeClaim:
@@ -67,10 +68,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: sqlserver
+  name: nostra-sqlserver
 spec:
   selector:
-    app: sqlserver
+    app: nostra-sqlserver
   ports:
   - port: 1433
     targetPort: 1433
@@ -90,7 +91,7 @@ spec:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: sqlserver-secrets
+  name: nostra-db-secrets
 type: Opaque
 data:
-  sa-password: UGFzc3dvcmQxMjMh  # Base64 encoded "Password123!"
+  sa-password: WW91clN0cm9uZ1Bhc3N3b3JkMTIzIQ== # YourStrongPassword123!
