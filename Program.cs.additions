@@ -1,0 +1,111 @@
+// Add these lines to your Program.cs file
+
+// Add database context with connection pooling
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultSqlConnection"),
+        sqlOptions =>
+        {
+            sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(30),
+                errorNumbersToAdd: null);
+            sqlOptions.CommandTimeout(30);
+        }
+    )
+);
+
+// Add health checks
+builder.Services.AddHealthChecks()
+    .AddSqlServer(
+        builder.Configuration.GetConnectionString("DefaultSqlConnection"),
+        name: "main-database",
+        tags: new[] { "database", "sql", "ready" })
+    .AddSqlServer(
+        builder.Configuration.GetConnectionString("TaskQueueConnection"),
+        name: "task-database",
+        tags: new[] { "database", "sql", "tasks", "ready" });
+
+// Add CORS policy
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("NostraApiPolicy", policy =>
+    {
+        policy.WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>())
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
+// Configure the HTTP request pipeline
+app.UseRouting();
+
+// Use CORS
+app.UseCors("NostraApiPolicy");
+
+// Map health checks
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        
+        var response = new
+        {
+            status = report.Status.ToString(),
+            components = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                description = e.Value.Description,
+                duration = e.Value.Duration.ToString()
+            })
+        };
+        
+        await context.Response.WriteAsJsonAsync(response);
+    }
+});
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = healthCheck => healthCheck.Tags.Contains("ready"),
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        
+        var response = new
+        {
+            status = report.Status.ToString(),
+            components = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                duration = e.Value.Duration.ToString()
+            })
+        };
+        
+        await context.Response.WriteAsJsonAsync(response);
+    }
+});
+
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false,
+    ResponseWriter = async (context, report) =>
+    {
+        await context.Response.WriteAsync("Alive");
+    }
+});
+
+// Apply migrations automatically in development environment
+if (app.Environment.IsDevelopment())
+{
+    using (var scope = app.Services.CreateScope())
+    {
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        dbContext.Database.Migrate();
+        
+        // Seed data if needed
+        // await SeedData.Initialize(scope.ServiceProvider);
+    }
+}
