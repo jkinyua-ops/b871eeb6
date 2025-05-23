@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nostra-dataload-ui
+  labels:
+    app: nostra-dataload-ui
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nostra-dataload-ui
+  template:
+    metadata:
+      labels:
+        app: nostra-dataload-ui
+    spec:
+      containers:
+      - name: nostra-dataload-ui
+        image: ${REGISTRY}/nostra-dataload-ui:latest
+        ports:
+        - containerPort: 80
+        env:
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Production"
+        - name: ConnectionStrings__DefaultSqlConnection
+          valueFrom:
+            secretKeyRef:
+              name: nostra-dataload-secrets
+              key: default-sql-connection
+        - name: API__BaseUrl
+          value: "http://nostra-dataload-host"
+        resources:
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nostra-dataload-ui
+spec:
+  selector:
+    app: nostra-dataload-ui
+  ports:
+  - port: 80
+    targetPort: 80
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nostra-dataload-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: nostra-dataload.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nostra-dataload-ui
+            port:
+              number: 80
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: nostra-dataload-host
+            port:
+              number: 80
