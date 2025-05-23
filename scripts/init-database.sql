@@ -15,5 +15,4 @@ BEGIN
 END
 GO
 
-USE Nostra_Dataload_Tasks;
-GO
+-- You can add additional initialization scripts here for tables, stored procedures, etc.
